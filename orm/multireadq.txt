@@ -1,0 +1,37 @@
+/* 
+ * Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
+shm
+   producer p	oBufs[]
+		nR[]	nReads outstanding for buf, 0~reclaim
+		pQ[]	spsc' queues to consumers
+		publish oBuf:
+			[useless] o = free oBuf (nR==0),
+			or if none, o = oldest oBuf (cyclic next)
+			++oBufs[o].generation
+			fence
+			[write oBufs[o] data]
+			pQ[o].push( o, oBufs[o].generation )
+
+   consumer	pQ: prod * for address calculations
+		    p idx of producer
+
+		pQ.peek:
+		    ?? while( size > 8 ) { pQ.ignore(); }
+
+		    --> o .. oBufs[o], nR[o], this=pQ[o]
+		    --> g = generation
+		    if nR == 0
+		    or g != oBufs[o].generation { pQ.ignore(); goto peek; }
+		    [reduce HERE]
+		    --nR
+		    pQ.popFront()
+		[ or rework to do "peekAll", "reduceAll", "popAll"
+		  if you don't want to do individual reductions ]
+		    
+
+		

@@ -1,0 +1,162 @@
+/* 
+ * Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
+/** \mainpage milde_malt2 Dstorm
+
+  Dstorm (distribute object remote memory) on top of a any ORM transport layer.
+  
+  Dstorm provides process-specific versions of vector data a way to communicate versions
+  of themself over arbitrary graphs of compute nodes.
+  It does this by handling details of pegged memory allocation and RDMA point-to-point transfers.
+  It provides a simple API, largely based on 3 operations:
+
+  - store (copy date into an output buffer)
+  - push (transfer output buffer over out-edges)
+  - reduce ("average" any data on in-edges into a receive buffer)
+
+  - Vectors in dstorm (residing in a Dstorm::Segment) actually consume memory for:
+    - a working copy (often the \em oBuf, or output buffer in a fixed network topology,
+      that is the source of outgoing transfers during \em push operations)
+    - an optional reduction copy (the \em rBuf, target of \em reduce operations that gather inputs)
+    - and input versions (one \em iBuf for each incoming graph edge
+
+  - Communications protocols can be varied by SegPolicy settings when Dstorm segments are created.
+*/
+/** \page mm2page malt2 pages
+  \tableofcontents
+  Leading text
+
+  \section mm2page2 some other page
+  some other info
+*/
+/** \page REDUCE_STREAM notes
+ - consider one SegNum
+ - async push/reduce has an issue with how to cleanly shut down.
+ - barrier is one option, I guess.
+ - \c REDUCE_STREAM is another way to handle the 'end-of-stream' condition.
+ - it require NOTIFY_ACK support
+
+ - Consider nodes of rank A, B with edge \f$A:send[i] \rightarrow_G B:recv[j]\f$ in ionet G, i.e.
+   - the \ref ScalNet of A has B in its ScalNet::send() vector,
+   - and B has A in its ScalNet::recv() vector.
+ - for A sending to B as \f$B=A:send[i]\f$, and \f$A=B:recv[j]\f$
+   - the index \f$j\f$ is maintained as \ref Dstorm::send_bufnums[G][i]
+ - this allows \e streaming as follows:
+   - \c Dstorm::push( SegNum, NotifyEnum NTF_*, snd=-1 ) from A
+     - NTF_RUNNING: \e initialization
+       - reset reduceState; return 0U
+     - NTF_SELECT: \e selective-push
+       - return push_impl(s,snd)
+     - NTF_DONE: \e end-of-stream handshake (ONLY)
+       - \b notify NTF_DONE to every(snd==-1) or a single A:send[snd] as notification
+         with offset (ntf_base + send_bufnum[snd])
+     - Effect: \c push is able to notify about end-of-stream, for nice shutdown.
+   - \c Dstorm::reduce( SegNum ) on B
+     - if all inputs have returned NTF_DONE to us, return uint32_t(-1) as a special end-of-all-streams signal
+       - This allows clean shutdown; i.e. "after everybody has finished sending to me"
+     - o.w. resort to NOTIFY_ACK to detect and reduce any/all available input rbufs
+       - \e rbuf ~ a 'receive buffer' for this segment on B
+       - look at notifications in range rbufNotifyBeg(=0 for write-notifies) of size B:recv.size()
+       - get notification value (and reset it)
+         - if val==NTF_RUNNING, invoke a <em>user-defined reduction</em> SegInfo.streamFunc(rbuf),
+           and set ackVal=NTF_ACK
+         - else val must be NTF_DONE, and we also use ackVal=NTF_DONE
+       - \b notify A with ackVal sent to notification slot (A:recv.size() + A:sendllist_index)
+         that <em> this particular A:push-->B </em> has been received
+         (and will be reduced 'very soon')
+
+ - without REDUCE_STREAM, you could have:
+   - full barrier during reduce
+   - NOTIFY_ACK mechanism (a lighter-weight barrier that waits only for all available inputs to have arrived)
+*/
+/** \page SEGSYNC_NOTIFY_ACK notes
+ - push:
+   - [assert ACK for prev push received, because \c store was called before \c push]
+   - FOR NOW: take out an IPC lock (ouch)
+     - IF multiple sends on a machine risk overflowing some queue (i.e. IB?), or
+     - IF segment is shared memory amongst processes on a \e machine
+     - THEN we could have trouble (overwrites / queue full)
+   - create MsgHeader
+   - push data to B A:send[i], using \c write_notify of NTF_RUNNING
+   - recorded un-acked push state
+
+ - reduce( SegNum ) on B
+   - wait for \e write-notification \c id in a predetermined B:recv.size() range
+   - get sender's \e ACK-notification number and
+     - [slightly unsafe] notify A with ackVal=NTF_ACK
+   - loop until we have received a full recv.size() number of push-notifications
+     - B hopes to have received one push-notification from every B:recv() partner
+   - reduce all available buffers
+   - [safer: delay sending the ACK-notification until this point]
+
+ - <em>Only after an ACK is received do we know a previous push has actually
+   finished <b>sending</b> its data</em>
+
+ - store:
+   - wait for a full set of ACK-notifications to arrive
+   - proceed as usual
+
+ - \b PLAN: Extension to MPI
+   - Notify-ack is like
+   - A --> B : MPI_Isend( ...tagSend... &reqA) during push
+   - B       : MPI_Irecv( ...tagSend... &reqB), for all rbufs,
+                                                during reduce
+     - then MPI_Wait(&reqB,&statusB), for all rbufs,
+     - then reduce all rbufs
+   - A : MPI_Wait( &reqA, &statusA ) during store
+ - But, of course, we want to do it with MPI_Put (1-sided communication)
+ - So:
+   - Initialize during add_segment wrapup:
+     - set MPI_group for send[] and recv[] neighbors
+     - MPI_Win_post(group,assert,win)
+       - for group ~ {rbufs} ~ recv[] neighbors
+       - guaranteed non-blocking
+   - push:
+     - MPI_Win_start( group, flag, win ); // group ~ send[] neighbors
+     - MPI_Put(..., win); to my send[] neighbours
+     - MPI_Win_complete(win);
+   - reduce:
+     - MPI_Win_wait(win);
+       - Prepares for local access by waiting for all recv[] neighbors
+         to have completed their MPI_Put operations into our local
+         segment memory
+     - reduce {rbufs} (our local access to the changed parts of segment)
+     - MPI_Win_post(group,assert,win) that we're ready for recv[]
+       neighbors to modify our {rbufs}
+ - within liborm:
+   - after \c add_segment, default operation should be as in SEGSYNC_NONE
+   - orm default behavior for \b new start(), complete(), and wait(),
+     post() is \b NO-OP - can promote to NOTIFY_ACK semantics by issuing
+     'C' api <em>something like</em>:
+     - <b>Orm::sync(Orm*, uint32_t const nSend, Rank* sendList, uint32_t
+       const nRecv, Rank* recvList )</b>
+       - MPI start+complete wait+post then execute MPI_Win functions.
+         - slight complication because some NOTIFY_ACK code is split
+           among store/push?
+ - within Dstorm/lua:
+   - after create_segment, in Dstorm a \b sync call at lua and Dstorm
+     should hide the send/recv lists.
+   - the call \e *could* look something like Dstorm::sync(SegNum),
+   - but \e should(?) be done automatically when the segment policy asks
+     for NOTIFY_ACK. call should just operate with a \e SegNum (keep
+     'C' api of orm hidden)
+
+
+ - \b TBD_Note: Above semantics satisfies NOTIFY_ACK, but does not
+   address safe termination, which is what REDUCE_STREAM addresses.
+   - old workaround is to carefully ensure every process executes
+     exactly the same number of push and reduce
+   - consider a push flag which is default 0:
+     - orm->start(segnum, flag) flag=DONE
+     - MPI_Put(<done msg>, win) to all send[] neighbors
+     - special MPI_Put of a \c NTF_DONE message with empty data, and an
+       integer flag (maybe just in the MsgHeader?)
+     - tell orm to get rid of sender from its send-group, perhaps
+       \c syncstop(Orm*,SegId)
+     - ... reduce notices special NTF_DONE MsgHeader and removes sender
+       from its (future) recv-group
+*/

@@ -1,0 +1,301 @@
+### makefile.std-obj-deps
+###	Include this file, after having set up
+###	- DEPS, OBJ, CC, CXX, CCFLAGS, CXXFLAGS
+###     - compile flags (can be tweaked for each of your subdirs)
+###
+# example std obj/ and deps/ suffixes:
+# .o		CXXFLAGS OPTFLAGS		simbase.a
+# -lal.o	CXXFLAGS LALFLAGS		simbase-lal.a
+# -cc1.o	CXXFLAGS LALFLAGS		simbase-cc1.a
+# -cc2.o	CXXFLAGS LALFLAGS		simbase-cc2.a
+# -rel.o	CXXFLAGS RELFLAGS		simbase-rel.a
+# -pg.o		CXXFLAGS RELFLAGS		simbase-pg.a
+# -v.o		CXXFLAGS DBGFLAGS		simbase-vv.a
+# -gl.o		CXXFLAGS OPTFLAGS -DLRU_GETLIFE	simbase-gl.a	obsolete
+# -vgl.o	CXXFLAGS DBGFLAGS -DLRU_GETLIFE	simbase-vgl.a	obsolete
+# -mv.o		CXXFLAGS DBGFLAGS BMIFLAGS	simbase-mv.a
+# -sg.o		CXXFLAGS DBGFLAGS SGOFLAGS	simbase-sg.a
+# .lo		CXXFLAGS -fPIC			simbase.so
+# -v.lo		CXXFLAGS DBGFLAGS -fPIC		simbase-v.so
+# -vv.lo	CXXFLAGS DBG2FLAGS -fPIC	simbase-vv.so
+#     ... etc. ...
+# -gq1.lo	CXXFLAGS OPTFLAGS -DGQ1_TYPE=1 -fPIC
+# -gq1rel.o	CXXFLAGS RELFLAGS -DGQ1_TYPE=1
+# -gq1v.lo	CXXFLAGS DBGFLAGS -DGQ1_TYPE=1 -fPIC
+GCC_VERSION := $(shell $(CXX) -dumpversion| awk 'BEGIN{FS="."}//{print $$1*10000+$$2*100+$$3}')
+gccvers:
+	echo "make detects gcc version $(GCC_VERSION)"
+ifeq (1,$(shell if [ $(GCC_VERSION) -lt 40400 ]; then echo 1; fi))
+xxgcc: gccvers
+	@echo "expect problems since -std=c++0x is not supported"
+else
+ifeq (1,$(shell if [ $(GCC_VERSION) -lt 40500 ]; then echo 1; fi))
+gccvers44x:
+	echo "gcc 4.4.x will probably not work with default CXXFLAGS settings"
+xxgcc: gccvers gccvers44x
+else
+ifeq (1,$(shell if [ $(GCC_VERSION) -lt 40600 ]; then echo 1; fi))
+#CXXFLAGS_405XX := -U__STRICT_ANSI -fdeduce-init-list
+CXXFLAGS_405XX := 
+CXXFLAGS += $(CXXFLAGS_405XX)
+gccvers405xx:
+	@echo "gcc 4.5.x uses some additional flags";
+	@echo "added flags = $(CXXFLAGS_405XX)"
+xxgcc: gccvers405xx
+else
+ifeq (1,$(shell if [ $(GCC_VERSION) -lt 40700 ]; then echo 1; fi))
+gccvers406xx:
+	echo "CXXFLAGS = $(CXXFLAGS)"
+	echo "gcc $(GCC_VERSION) 4.6.x flags to be determined"
+xxgcc: gccvers406xx
+ifeq (1,$(shell if [ $(GCC_VERSION) -lt 40800 ]; then echo 1; fi))
+gccvers407xx:
+	echo "CXXFLAGS = $(CXXFLAGS)"
+	echo "gcc $(GCC_VERSION) 4.7.x flags to be determined"
+xxgcc: gccvers406xx
+else
+gccvers407xx:
+	echo "CXXFLAGS = $(CXXFLAGS)"
+	echo "gcc $(GCC_VERSION) >= 4.8.0 flags to be determined"
+xxgcc: gccversgt40
+endif
+endif
+endif
+endif
+endif
+# else
+# xx:
+#	echo "gcc $(GCC_VERSION) < 40500"
+# endif
+
+ifeq ($(shell uname -o),Cygwin)
+FPIC:=
+else
+FPIC:=-fPIC
+endif
+
+VALGRIND := valgrind
+VALGRINDX := valgrind -v --leak-check=full --show-reachable=yes --show-leak-kinds=all
+VGX = echo -n "valgrind $@ ... " && $(VALGRINDX) ./$@ >& $(LOG)/$@.vg && cat $(LOG)/$@.vg | grep 'no leaks are possible' || echo MAY LEAK
+VGLOG = echo -n "valgrind $(1) ... " && { $(VALGRINDX) $(1) > $@ 2>&1 ; } && cat $@ | grep 'no leaks are possible' || echo MAY LEAK
+
+# boilerplate library strippers
+ifeq (1,1)
+STRIP_A = @echo "not stripping $@"
+# with ld 2.21 and gcc 4.5, stripping gives "no group info for section .xxx" type errors
+#BFD: ../bin/stuubIMw/stringOps-rel.o: no group info for section .rodata._ZTVN5boost9exceptionE
+#   or
+#BFD: ../bin/stuubIMw/vstorLr-rel.o: no group info for section .rodata._ZTSN3sim9VstorImplE
+#STRIP_SO = echo "Stripping $@..." \
+#	&& objcopy --only-keep-debug $@.0.0 $@.0.0.dbg \
+#	&& objcopy --strip-debug --add-gnu-debuglink=$@.0.0.dbg $@.0.0 \
+#	&& ln -sf $(patsubst $(BIN)/%.so,%.so.0.0,$@) $@.0 \
+#	&& ln -sf $(patsubst $(BIN)/%.so,%.so.0.0,$@) $@
+STRIP_SO = @echo "Stripping $@..." \
+	&& objcopy --only-keep-debug $@ $@.dbg \
+	&& objcopy --strip-debug --add-gnu-debuglink=$@ $@
+endif
+ifeq (0,1)
+STRIP_A = @echo "Stripping $@..." \
+	  && sleep 1 \
+	  && objcopy --only-keep-debug $@ $@.dbg \
+	  && sleep 1 \
+	  && objcopy --strip-debug --add-gnu-debuglink=$@.dbg $@
+STRIP_SO = @echo "Stripping $@..." \
+	&& objcopy --only-keep-debug $@.0.0 $@.0.0.dbg \
+	&& objcopy --strip-debug --add-gnu-debuglink=$@.0.0.dbg $@.0.0 \
+	&& ln -sf $(patsubst $(BIN)/%.so,%.so.0.0,$@) $@.0 \
+	&& ln -sf $(patsubst $(BIN)/%.so,%.so.0.0,$@) $@
+endif
+ifeq (0,1)
+#STRIP_A = @echo "Stripping $@..." \
+#	  && objcopy --only-keep-debug $@ $@.dbg \
+#	  && objcopy --strip-debug --add-gnu-debuglink=$@.dbg $@
+STRIP_SO = @echo "links for $@..." \
+	&& ln -sf $(patsubst $(BIN)/%.so,%.so.0.0,$@) $@.0 \
+	&& ln -sf $(patsubst $(BIN)/%.so,%.so.0.0,$@) $@
+endif
+
+PROFLAGS?=-O1 -march=native -DNDEBUG -pg -fprofile-arcs -ftest-coverage -DPROFILING
+
+SRC_DIR?=.
+STRIP_SOURCE := $(SOURCES)
+#STRIP_SOURCE := $(subst $(SRC_DIR)/,,$(SOURCES))
+#STRIP_SOURCE := $(patsubst ./%,%,$(STRIP_SOURCE))
+
+MAKECDEPEND   = mkdir -p $(DEPS)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC)  -M $(CCFLAGS) $($*_CCFLAGS)
+MAKECXXDEPEND = mkdir -p $(DEPS)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) -M $(CXXFLAGS) $($*_CXXFLAGS)
+MAKECUDEPEND = mkdir -p $(DEPS)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(NVCC) $(NVCCFLAGS) $($*_CUFLAGS) -E -Xcompiler "-isystem $(CUDA_INSTALL_PATH)/include -MM"
+
+#$(info CXX=$(CXX) INSIDE makefile.std-obj-deps)
+
+# I now strip off /$(SRC_DIR)/ underneath $(OBJ) and $(DPES) directories
+#
+#  Definitely too many debug versions XXX
+#  Also OBJ and DEPS subdirs are possible (see ../simgram/, for example)
+#
+#$(DEPS)/*.d:;
+#PRECIOUSDEPS = .PRECIOUS: $(patsubst %.cpp,$(DEPS)/%.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-rel.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-pg.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-v.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-gl.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-vgl.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-m.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-mv.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-sg.d,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-rel.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-v.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-vv.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-wol1.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-wol2.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-glu.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-glu-v.ld,$(filter %.cpp,$(1))) \
+	$(patsubst %.cpp,$(DEPS)/%-glu-rel.d,$(filter %.cpp,$(1)))
+.PRECIOUS: \
+	$(patsubst %.cpp,$(DEPS)/%.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-lal.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-cc1.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-cc2.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-rel.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-pg.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-v.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-vv.d,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%.ld,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-rel.ld,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%.ld,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-v.ld,$(filter %.cpp,$(STRIP_SOURCE))) \
+	$(patsubst %.cpp,$(DEPS)/%-vv.ld,$(filter %.cpp,$(STRIP_SOURCE))) \
+	\
+	$(patsubst %.c,$(DEPS)/%.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-lal.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-cc1.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-cc2.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-rel.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-pg.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-v.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-vv.d,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%.ld,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-rel.ld,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%.ld,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-v.ld,$(filter %.c,$(STRIP_SOURCE))) \
+	$(patsubst %.c,$(DEPS)/%-vv.ld,$(filter %.c,$(STRIP_SOURCE))) \
+	
+	$(patsubst %.cu,$(DEPS)/%.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-lal.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-cc1.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-cc2.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-rel.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-pg.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-v.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-vv.d,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%.ld,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-rel.ld,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%.ld,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-v.ld,$(filter %.cu,$(STRIP_SOURCE))) \
+	$(patsubst %.cu,$(DEPS)/%-vv.ld,$(filter %.cu,$(STRIP_SOURCE))) \
+	#
+
+.PRECIOUS: $(DEPS)/%.d $(DEPS)/%-lal.d $(DEPS)/%-cc1.d $(DEPS)/%-cc2.d $(DEPS)/%-rel.d $(DEPS)/%-pg.d $(DEPS)/%-v.d $(DEPS)/%-vv.d \
+	$(DEPS)/%-rel.ld $(DEPS)/%.ld $(DEPS)/%-v.ld $(DEPS)/%-vv.ld
+$(DEPS)/%.d: $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)                    -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.o:!' > $(DEPS)/$*.d
+$(DEPS)/%.ld : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)                  $(FPIC) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.lo:!' > $(DEPS)/$*.ld
+$(DEPS)/%-rel.d : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)   $(RELFLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-rel.o:!' > $(DEPS)/$*-rel.d
+$(DEPS)/%-v.d : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)     $(DBGFLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-v.o:!' > $(DEPS)/$*-v.d
+$(DEPS)/%-pg.d : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)    $(PROFLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-pg.o:!' > $(DEPS)/$*-pg.d
+# CUDA header dependencies
+$(DEPS)/%-cu.d: $(SRC_DIR)/%.cu ; $(MAKECUDEPEND) -Wno-deprecated-gpu-targets \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.o:!' > $(DEPS)/$*-cu.d
+# and C versions
+$(DEPS)/%.d: $(SRC_DIR)/%.c ; $(MAKECDEPEND)                    -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.o:!' > $(DEPS)/$*.d
+$(DEPS)/%.ld : $(SRC_DIR)/%.c ; $(MAKECDEPEND)                  $(FPIC) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.lo:!' > $(DEPS)/$*.ld
+$(DEPS)/%-rel.d : $(SRC_DIR)/%.c ; $(MAKECDEPEND)   $(RELFLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-rel.o:!' > $(DEPS)/$*-rel.d
+$(DEPS)/%-v.d : $(SRC_DIR)/%.c ; $(MAKECDEPEND)     $(DBGFLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-v.o:!' > $(DEPS)/$*-v.d
+$(DEPS)/%-pg.d : $(SRC_DIR)/%.c ; $(MAKECDEPEND)    $(PROFLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-pg.o:!' > $(DEPS)/$*-pg.d
+#$(DEPS)/%-lal.d: $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)   $(LALFLAGS)  -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.o:!' > $(DEPS)/$*.d
+#$(DEPS)/%-cc1.d: $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)   $(CC1FLAGS)  -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.o:!' > $(DEPS)/$*.d
+#$(DEPS)/%-cc2.d: $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)   $(CC2FLAGS)  -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*.o:!' > $(DEPS)/$*.d
+#$(DEPS)/%-vv.d : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)    $(DBG2FLAGS) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-vv.o:!' > $(DEPS)/$*-vv.d
+#$(DEPS)/%-rel.ld : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)  $(RELFLAGS) $(FPIC) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-rel.lo:!' > $(DEPS)/$*-rel.ld
+#$(DEPS)/%-pg.ld : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)    $(PROFLAGS) $(FPIC) -o - \
+		$< | sed 's!^'`basename $*`'.lo:!$(OBJ)/$*-pg.lo:!' > $(DEPS)/$*-pg.d
+#$(DEPS)/%-v.ld : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)    $(DBGFLAGS) $(FPIC) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-v.lo:!' > $(DEPS)/$*-v.ld
+#$(DEPS)/%-vv.ld : $(SRC_DIR)/%.cpp ; $(MAKECXXDEPEND)   $(DBG2FLAGS) $(FPIC) -o - \
+		$< | sed 's!^'`basename $*`'.o:!$(OBJ)/$*-vv.lo:!' > $(DEPS)/$*-vv.ld
+
+$(OBJ)/%.o : $(SRC_DIR)/%.cpp $(DEPS)/%.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $($*_CXXFLAGS)                     -o $@ -c $<
+$(OBJ)/%.lo : $(SRC_DIR)/%.cpp $(DEPS)/%.ld
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $($*_CXXFLAGS)             $(FPIC) -o $@ -c $<
+$(OBJ)/%-rel.o : $(SRC_DIR)/%.cpp $(DEPS)/%-rel.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $($*_CXXFLAGS) $(RELFLAGS)         -o $@ -c $<
+$(OBJ)/%-rel-pic.o : $(SRC_DIR)/%.cpp $(DEPS)/%-rel.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $($*_CXXFLAGS) $(RELFLAGS) $(FPIC) -o $@ -c $<
+$(OBJ)/%-v.o : $(SRC_DIR)/%.cpp $(DEPS)/%-v.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $($*_CXXFLAGS) $($*_CXXFLAGS) $(DBGFLAGS) -o $@ -c $<
+$(OBJ)/%-pg.o : $(SRC_DIR)/%.cpp $(DEPS)/%-pg.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $($*_CXXFLAGS) $(PROFLAGS) -o $@ -c $<
+# and cuda cpp compilations
+ifeq ($(WITH_GPU),1)
+$(OBJ)/%-cu.o : $(SRC_DIR)/%.cu $(DEPS)/%-cu.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(NVCC) $(NVCCFLAGS) -g $(GENCODE_FLAGS) $($*_NVFLAGS) -o $@ -c $<
+$(OBJ)/%-cu.ptx : $(SRC_DIR)/%.cu $(DEPS)/%-cu.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(NVCC) $(NVCCFLAGS) $(HIGHCODE_FLAGS) $($*_NVFLAGS) -o $@ -c $<
+$(OBJ)/%-cu-rel.o : $(SRC_DIR)/%.cu $(DEPS)/%-cu.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(NVCC) $(NVCCFLAGS) -g $(NVRELFLAGS) $(GENCODE_FLAGS) $($*_NVFLAGS) -o $@ -c $<
+$(OBJ)/%-cu.lo : $(SRC_DIR)/%.cu $(DEPS)/%-cu.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(NVCC) $(NVCCFLAGS) -g --compiler-options "$(FPIC)" $(GENCODE_FLAGS) $($*_NVFLAGS) -o $@ -c $<
+endif
+# and C versions
+$(OBJ)/%.o : $(SRC_DIR)/%.c $(DEPS)/%.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC) $(CCFLAGS) $($*_CFLAGS)             -o $@ -c $<
+$(OBJ)/%.lo : $(SRC_DIR)/%.c $(DEPS)/%.ld
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC) $(CCFLAGS) $($*_CFLAGS)             $(FPIC) -o $@ -c $<
+$(OBJ)/%-rel.o : $(SRC_DIR)/%.c $(DEPS)/%-rel.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC) $(CCFLAGS) $($*_CFLAGS) $(RELFLAGS) -o $@ -c $<
+$(OBJ)/%-rel-pic.o : $(SRC_DIR)/%.c $(DEPS)/%-rel.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC) $(CCFLAGS) $($*_CFLAGS) $(RELFLAGS) $(FPIC) -o $@ -c $<
+$(OBJ)/%-v.o : $(SRC_DIR)/%.c $(DEPS)/%-v.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC) $(CCFLAGS) $($*_CFLAGS) $(DBGFLAGS) $($*_CXXFLAGS) -o $@ -c $<
+$(OBJ)/%-pg.o : $(SRC_DIR)/%.c $(DEPS)/%-pg.d
+	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CC) $(CCFLAGS) $($*_CFLAGS) $(PROFLAGS) -o $@ -c $<
+
+#$(OBJ)/%-lal.o : $(SRC_DIR)/%.cpp $(DEPS)/%.d
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(LALFLAGS) -o $@ -c $<
+#$(OBJ)/%-cc1.o : $(SRC_DIR)/%.cpp $(DEPS)/%.d
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(CC1FLAGS) -o $@ -c $<
+#$(OBJ)/%-cc2.o : $(SRC_DIR)/%.cpp $(DEPS)/%.d
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(CC2FLAGS) -o $@ -c $<
+#$(OBJ)/%-pg.o : $(SRC_DIR)/%.cpp $(DEPS)/%-pg.d
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(PROFLAGS) -o $@ -c $<
+#$(OBJ)/%-vv.o : $(SRC_DIR)/%.cpp $(DEPS)/%-v.d
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(DBG2FLAGS) -o $@ -c $<
+#$(OBJ)/%-rel.lo : $(SRC_DIR)/%.cpp $(DEPS)/%-rel.ld
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(RELFLAGS) $(FPIC) -o $@ -c $<
+#$(OBJ)/%-pg.lo : $(SRC_DIR)/%.cpp $(DEPS)/%-pg.ld
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(PROFLAGS) $(FPIC) -o $@ -c $<
+#$(OBJ)/%-v.lo : $(SRC_DIR)/%.cpp $(DEPS)/%-v.ld
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(DBGFLAGS) $(FPIC) -o $@ -c $<
+#$(OBJ)/%-vv.lo : $(SRC_DIR)/%.cpp $(DEPS)/%-vv.ld
+#	mkdir -p $(OBJ)/`dirname $(subst $(SRC_DIR)/,,$<)` && $(CXX) $(CXXFLAGS) $(DBG2FLAGS) $(FPIC) -o $@ -c $<
+
+#
+

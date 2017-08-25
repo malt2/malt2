@@ -1,0 +1,78 @@
+/* 
+ * Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
+
+#include "orm_shm.h"
+
+#include <stdarg.h>
+#include <sstream>
+#include <iostream>
+#include <iomanip>
+#ifdef __CYGWIN__
+#include <stdio.h>      // vsnprintf
+#include <stdlib.h>      // exit
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    static void shm_cout( char const* msg )
+    {
+        using namespace std;
+        ostringstream oss;
+        orm_rank_t rank;
+        if( shm_proc_rank( &rank ) != ORM_SUCCESS ){
+            cout<<"ERROR determining shm_proc_rank"<<endl;
+            exit(1);
+        }
+        oss<<"S"<<setfill('0')<<setw(4)<<rank
+            <<setfill(' ')<<":"<< msg <<endl;
+        cout<<oss.str()<<endl;
+    }
+
+#define RECURSE_GAURD 0
+#if RECURSE_GAURD
+    // Avoid this (globals inside libraries CAN bite you unexpectedly)
+    static volatile unsigned shm_printf_recurse=0U;
+#endif
+
+    /** print shm msg as "S<rank>: msg" using plain \c cout.
+     *
+     * Makes a small attempt to have strings emitted in single op.
+     * Doesn't yet serialize with an interprocess lock
+     *
+     * For distributed shm + orm system, think about adding a
+     * 'host' prefix and perhaps piggybacking on orm_printf
+     * (or mpi printf for other network fabrics).
+     */
+    int shm_printf (const char *fmt, ...)
+    {
+#if RECURSE_GAURD
+        if( ++shm_printf_recurse == 1U )
+        {
+#endif
+            fprintf(stdout,fmt); fflush(stdout);
+            // stack corrutpion if called recursively
+            va_list args;
+            char line[1024U];
+            int nchars;
+            va_start( args, fmt );
+            nchars = vsnprintf( line, 1024U, fmt, args );
+            va_end(args);
+            line[nchars] = '\0';
+            shm_cout( &line[0] );       // gaurd against THIS recursing here
+#if RECURSE_GAURD
+        }
+        --shm_printf_recurse;
+#endif
+        return ORM_SUCCESS;
+    }
+
+#ifdef __cplusplus
+}//extern "C"
+#endif
