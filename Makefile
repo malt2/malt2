@@ -21,8 +21,7 @@ torch: malt
 		echo "Source the torch environment"; \
 		false; \
 	fi
-	cd malt2.torch && cmake . && make && cd -
-	luarocks make malt2.torch/malt-2-scm-1.rockspec  
+	cd malt2.torch && luarocks make malt-2-scm-1.rockspec && cd -
 	luarocks install dstoptim/dstoptim-scm-1.rockspec 
 
 clean:
