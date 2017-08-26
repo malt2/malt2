@@ -22,7 +22,7 @@ torch: malt
 		false; \
 	fi
 	cd malt2.torch && cmake . && make && cd -
-	luarocks install malt2.torch/malt-2-scm-1.rockspec  
+	luarocks make malt2.torch/malt-2-scm-1.rockspec  
 	luarocks install dstoptim/dstoptim-scm-1.rockspec 
 
 clean:
