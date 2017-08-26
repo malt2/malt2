@@ -1,0 +1,6 @@
+[submodule "malt2.torch"]
+	path = malt2.torch
+	url = https://github.com/malt2/malt2.torch
+[submodule "dstoptim"]
+	path = dstoptim
+	url = https://github.com/malt2/dstoptim
