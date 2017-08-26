@@ -48,7 +48,8 @@ If using modules, you can try:
 module install icc cuda80 luajit
 ```
 ### To build everything including dstorm, orm and torch, just type:
-````
+
+```
 make
 ```
 
