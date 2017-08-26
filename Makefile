@@ -30,7 +30,7 @@ clean:
 	rm -rf dstoptim/build
 	$(MAKE) -C dstorm realclean
 	$(MAKE) -C orm clean
-	$(MAKE) -C torch clean
+	$(MAKE) -C malt2.torch clean
 	rm *.log
 	
 .PHONY: all dstorm orm torch clean 
