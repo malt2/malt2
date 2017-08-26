@@ -30,7 +30,7 @@ maintaining efficiency and state-of-the-art accuracy.
 * Checkout the latest version of MALT-2 from [github](https://github.com/malt-2)
 
 ```
-git clone https://github.com/malt-2/malt.git
+git clone https://github.com/malt-2/malt.git --recursive
 ```
 
 ### Setup the environment variables
