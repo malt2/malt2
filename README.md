@@ -36,7 +36,7 @@ git clone https://github.com/malt2/malt2.git --recursive
 ### Setup the environment variables
 
 ### Source your torch/cuda/MKL environment:
-on some machines, you might need things something like:
+on some machines, you might need things something like (MKL is optional):
 ```
 source [torch-dir]/install/bin/torch-activate
 source /opt/intel/mkl/bin/intel64/mklvars.sh intel64
@@ -47,7 +47,7 @@ If using modules, you can try:
 ```
 module install icc cuda80 luajit
 ```
-### To build everything including dstorm, orm and torch, just type:
+### To build everything including dstorm, orm and torch, just type from the top-level directory:
 
 ```
 make
@@ -59,6 +59,7 @@ To build componenet-wise (not required if using make above):
 
 #### Build the dstorm directory, run:
 ```
+cd dstorm
 ./mkit.sh GPU test
 ```
 You should get a `SUCCESS` as the output. Check the log files to ensure the build is successful.
@@ -78,6 +79,7 @@ can match the libdstorm compile options.
 
 
 ```
+cd orm
 ./mkorm.sh GPU
 ```
 
