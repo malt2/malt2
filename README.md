@@ -105,22 +105,22 @@ require "malt2"
 
 * With MPI, then you'll need to run via mpirun, perhaps something like:
 ```
-mpirun -np 3 `which th` `pwd -P`/test.lua mpi 2>&1 | tee test-mpi.log
+mpirun -np 2 `which th` `pwd -P`/test.lua mpi 2>&1 | tee test-mpi.log
 ```
 
 * if GPU,
 ```
-mpirun -np 3 `which th` `pwd -P`/test.lua gpu 2>&1 | tee test-GPU-gpu.log
+mpirun -np 2 `which th` `pwd -P`/test.lua gpu 2>&1 | tee test-GPU-gpu.log
 ```
 
 * NEW: a `WITH_GPU` compile can also run with MPI transport
 ```
-mpirun -np 3 `which th` `pwd -P`/test.lua mpi 2>&1 | tee test-GPU-mpi.log
+mpirun -np 2 `which th` `pwd -P`/test.lua mpi 2>&1 | tee test-GPU-mpi.log
 ```
 
 default transport is set to the "highest" built into libdstorm2: GPU > MPI  > SHM
 ```
-mpirun -np 3 `which th` `pwd -P`/test.lua 2>&1 | tee test-best.log
+mpirun -np 2 `which th` `pwd -P`/test.lua 2>&1 | tee test-best.log
 ```
 
 ### Running over multiple GPUs.
@@ -141,5 +141,12 @@ changes the enumeration order and does not restrict visibility.
 ## Applications
 
 ### Now we can run simple torch demos such as distributed linear-regression or imagenet.
-Follow instructions here.
 
+Clone the tutorials repo:
+
+```
+git clone https://github.com/malt2/malt2.tutorials
+```
+
+Run individual tutorials as per README in each sub-directory. The mpitest.sh is the general launch script. An additonal
+script redirect.sh is provided to distribute MPI processes over different GPUs.
