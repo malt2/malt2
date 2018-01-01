@@ -33,7 +33,7 @@ Follow the torch, cuda and boost websites to install the respective packages. Fo
 wget https://www.open-mpi.org/software/ompi/v2.1/downloads/openmpi-2.1.2.tar.bz2
 tar xfj openmpi-2.1.2.tar.bz2
 cd openmpi-2.1.2; mkdir build; cd build
-./configure --prefix=$HOME/usr --enable-mpi-cxx --enable-shared --enable-mpi-thread-multiple --enable-mpi-ext=affinity,cuda --with-cuda=/usr/local/cuda
+../configure --prefix=$HOME/usr --enable-mpi-cxx --enable-shared --enable-mpi-thread-multiple --enable-mpi-ext=affinity,cuda --with-cuda=/usr/local/cuda
 make -j 8 all
 make install
 ```
