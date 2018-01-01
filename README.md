@@ -27,6 +27,19 @@ maintaining efficiency and state-of-the-art accuracy.
 
 ### Install Torch, MPI, Boost and CUDA (if using GPU).
 
+Follow the torch, cuda and boost websites to install the respective packages. For Open-MPI follow instructions below to install MPI with CUDA.
+
+```
+wget https://www.open-mpi.org/software/ompi/v2.1/downloads/openmpi-2.1.2.tar.bz2
+tar xfj openmpi-2.1.2.tar.bz2
+cd openmpi-2.1.2; mkdir build; cd build
+./configure --prefix=$HOME/usr --enable-mpi-cxx --enable-shared --enable-mpi-thread-multiple --enable-mpi-ext=affinity,cuda --with-cuda=/usr/local/cuda
+make -j 20 all
+make install
+```
+Note: Use similar instructions with openmpi-3.0.0.tar.bz2, but --enable-mpi-thread-multiple needs then to be removed.
+
+
 * Checkout the latest version of MALT-2 from [github](https://github.com/malt-2)
 
 ```
