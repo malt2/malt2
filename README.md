@@ -1,5 +1,7 @@
 # MALT-2:Distributed Data-Parallel Learning for Torch
 
+Please refer to our [paper](http://asim.ai/papers/asap.pdf) that describes this federated learning framework.
+
 ## About
 
 MALT-2 is a distributed data-parallel machine learning system for  [Torch](http://torch.ch).
